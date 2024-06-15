@@ -6,7 +6,7 @@ use arrayref::array_ref;
 use common::rpc;
 use raydium_amm::math::{CheckedCeilDiv, U128};
 use safe_transmute::{to_bytes::transmute_to_bytes, transmute_one_pedantic};
-use solana_client::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{account_info::IntoAccountInfo, program_pack::Pack};
 use solana_sdk::{
     commitment_config::CommitmentConfig, message::Message, pubkey::Pubkey, transaction::Transaction,
@@ -34,7 +34,7 @@ fn min_amount_with_slippage(input_amount: u64, slippage_bps: u64) -> u64 {
 }
 
 // pool_vault_amount = vault_amount + open_orders.native_total + partial filled without consumed - amm.need_take
-pub fn calculate_pool_vault_amounts(
+pub async fn calculate_pool_vault_amounts(
     client: &RpcClient,
     amm_program: &Pubkey,
     amm_pool: &Pubkey,
@@ -55,7 +55,7 @@ pub fn calculate_pool_vault_amounts(
                 amm_keys.market,
                 *market_keys.event_q,
             ];
-            let rsps = rpc::get_multiple_accounts(client, &load_pubkeys)?;
+            let rsps = rpc::get_multiple_accounts(client, &load_pubkeys).await?;
             let accounts = array_ref![rsps, 0, 7];
             let [amm_account, amm_target_account, amm_pc_vault_account, amm_coin_vault_account, amm_open_orders_account, market_account, market_event_q_account] =
                 accounts;
@@ -93,7 +93,7 @@ pub fn calculate_pool_vault_amounts(
 
                     let amm_authority = Pubkey::find_program_address(
                         &[raydium_amm::processor::AUTHORITY_AMM],
-                        &amm_program,
+                        amm_program,
                     )
                     .0;
                     let lamports = &mut 0;
@@ -154,7 +154,9 @@ pub fn calculate_pool_vault_amounts(
             }
         }
         CalculateMethod::Simulate(fee_payer) => {
-            let amm = rpc::get_account::<raydium_amm::state::AmmInfo>(client, amm_pool)?.unwrap();
+            let amm = rpc::get_account::<raydium_amm::state::AmmInfo>(client, amm_pool)
+                .await?
+                .unwrap();
             let simulate_pool_info_instruction = raydium_amm::instruction::simulate_get_pool_info(
                 amm_program,
                 amm_pool,
@@ -168,18 +170,19 @@ pub fn calculate_pool_vault_amounts(
                 None,
             )?;
             let mut message = Message::new(&[simulate_pool_info_instruction], Some(&fee_payer));
-            message.recent_blockhash = client.get_latest_blockhash()?;
+            message.recent_blockhash = client.get_latest_blockhash().await?;
             let txn = Transaction::new_unsigned(message);
             let result =
-                rpc::simulate_transaction(&client, &txn, false, CommitmentConfig::confirmed())?;
+                rpc::simulate_transaction(client, &txn, false, CommitmentConfig::confirmed())
+                    .await?;
             // println!("{:#?}", result);
             let mut ret = raydium_amm::state::GetPoolData::default();
             if result.value.err.is_none() {
                 if let Some(logs) = result.value.logs {
                     for log in logs {
-                        if let Some(_) = log.find("GetPoolData: ") {
-                            let begin = log.find("{").unwrap();
-                            let end = log.rfind("}").unwrap() + 1;
+                        if log.contains("GetPoolData: ") {
+                            let begin = log.find('{').unwrap();
+                            let end = log.rfind('}').unwrap() + 1;
                             let json_str = log.get(begin..end).unwrap();
                             ret = raydium_amm::state::GetPoolData::from_json(json_str)
                         }
@@ -303,14 +306,14 @@ fn swap_exact_amount(
             .unwrap()
             .0;
         let swap_in_after_deduct_fee = U128::from(amount_specified).checked_sub(swap_fee).unwrap();
-        let swap_amount_out = raydium_amm::math::Calculator::swap_token_amount_base_in(
+
+        raydium_amm::math::Calculator::swap_token_amount_base_in(
             swap_in_after_deduct_fee,
             pc_vault_amount.into(),
             coin_vault_amount.into(),
             swap_direction,
         )
-        .as_u64();
-        swap_amount_out
+        .as_u64()
     } else {
         let swap_in_before_add_fee = raydium_amm::math::Calculator::swap_token_amount_base_out(
             amount_specified.into(),
@@ -318,7 +321,8 @@ fn swap_exact_amount(
             coin_vault_amount.into(),
             swap_direction,
         );
-        let swap_in_after_add_fee = swap_in_before_add_fee
+
+        swap_in_before_add_fee
             .checked_mul(swap_fee_denominator.into())
             .unwrap()
             .checked_ceil_div(
@@ -329,9 +333,7 @@ fn swap_exact_amount(
             )
             .unwrap()
             .0
-            .as_u64();
-
-        swap_in_after_add_fee
+            .as_u64()
     };
 
     Ok(other_amount_threshold)
@@ -354,12 +356,12 @@ pub fn deposit_amount_with_slippage(
         0 => {
             let max_coin_amout = input_amount;
             let max_pc_amount = max_amount_with_slippage(another_amount, slippage_bps);
-            return Ok((max_coin_amout, max_pc_amount));
+            Ok((max_coin_amout, max_pc_amount))
         }
         _ => {
             let max_coin_amount = max_amount_with_slippage(another_amount, slippage_bps);
             let max_pc_amount = input_amount;
-            return Ok((max_coin_amount, max_pc_amount));
+            Ok((max_coin_amount, max_pc_amount))
         }
     }
 }
@@ -381,6 +383,7 @@ pub fn withdraw_amounts_with_slippage(
     Ok((pc_amount, coin_amount))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn swap_with_slippage(
     pc_vault_amount: u64,
     coin_vault_amount: u64,

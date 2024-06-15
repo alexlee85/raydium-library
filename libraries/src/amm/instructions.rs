@@ -4,6 +4,7 @@ use amm::utils::AmmKeys;
 use anyhow::Result;
 use solana_sdk::{instruction::Instruction, pubkey::Pubkey};
 
+#[allow(clippy::too_many_arguments)]
 pub fn initialize_amm_pool(
     amm_program: &Pubkey,
     amm_keys: &AmmKeys,
@@ -17,7 +18,7 @@ pub fn initialize_amm_pool(
     coin_amount: u64, // transfer coin asset to the pool coin vault as pool init vault
 ) -> Result<Instruction> {
     let amm_pool_init_instruction = raydium_amm::instruction::initialize2(
-        &amm_program,
+        amm_program,
         &amm_keys.amm_pool,
         &amm_keys.amm_authority,
         &amm_keys.amm_open_order,
@@ -27,14 +28,14 @@ pub fn initialize_amm_pool(
         &amm_keys.amm_coin_vault,
         &amm_keys.amm_pc_vault,
         &amm_keys.amm_target,
-        &Pubkey::find_program_address(&[&raydium_amm::processor::AMM_CONFIG_SEED], &amm_program).0,
+        &Pubkey::find_program_address(&[raydium_amm::processor::AMM_CONFIG_SEED], amm_program).0,
         create_fee_detination,
         &amm_keys.market_program,
         &amm_keys.market,
-        &user_owner,
-        &user_coin,
-        &user_pc,
-        &user_lp,
+        user_owner,
+        user_coin,
+        user_pc,
+        user_lp,
         amm_keys.nonce,
         open_time,
         pc_amount,
@@ -43,6 +44,7 @@ pub fn initialize_amm_pool(
     Ok(amm_pool_init_instruction)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn deposit(
     amm_program: &Pubkey,
     amm_keys: &AmmKeys,
@@ -56,7 +58,7 @@ pub fn deposit(
     base_side: u64, //0: base coin; 1: base pc
 ) -> Result<Instruction> {
     let deposit_instruction = raydium_amm::instruction::deposit(
-        &amm_program,
+        amm_program,
         &amm_keys.amm_pool,
         &amm_keys.amm_authority,
         &amm_keys.amm_open_order,
@@ -66,10 +68,10 @@ pub fn deposit(
         &amm_keys.amm_pc_vault,
         &amm_keys.market,
         &market_keys.event_q,
-        &user_coin,
-        &user_pc,
-        &user_lp,
-        &user_owner,
+        user_coin,
+        user_pc,
+        user_lp,
+        user_owner,
         max_coin_amount,
         max_pc_amount,
         base_side,
@@ -77,6 +79,7 @@ pub fn deposit(
     Ok(deposit_instruction)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn withdraw(
     amm_program: &Pubkey,
     amm_keys: &AmmKeys,
@@ -88,7 +91,7 @@ pub fn withdraw(
     withdraw_lp_amount: u64,
 ) -> Result<Instruction> {
     let withdraw_instruction = raydium_amm::instruction::withdraw(
-        &amm_program,
+        amm_program,
         &amm_keys.amm_pool,
         &amm_keys.amm_authority,
         &amm_keys.amm_open_order,
@@ -114,6 +117,7 @@ pub fn withdraw(
     Ok(withdraw_instruction)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn swap(
     amm_program: &Pubkey,
     amm_keys: &AmmKeys,
@@ -127,7 +131,7 @@ pub fn swap(
 ) -> Result<Instruction> {
     let swap_instruction = if swap_base_in {
         raydium_amm::instruction::swap_base_in(
-            &amm_program,
+            amm_program,
             &amm_keys.amm_pool,
             &amm_keys.amm_authority,
             &amm_keys.amm_open_order,
@@ -149,7 +153,7 @@ pub fn swap(
         )?
     } else {
         raydium_amm::instruction::swap_base_out(
-            &amm_program,
+            amm_program,
             &amm_keys.amm_pool,
             &amm_keys.amm_authority,
             &amm_keys.amm_open_order,

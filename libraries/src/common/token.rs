@@ -69,8 +69,8 @@ pub fn mint_to(
     vec![spl_token::instruction::mint_to(
         &spl_token::id(),
         mint,
-        &to_token,
-        &mint_authority,
+        to_token,
+        mint_authority,
         &[],
         amount,
     )
@@ -84,7 +84,7 @@ pub fn transfer_to(
     amount: u64,
 ) -> Vec<Instruction> {
     vec![
-        spl_token::instruction::transfer(&spl_token::id(), from, to, &from_authority, &[], amount)
+        spl_token::instruction::transfer(&spl_token::id(), from, to, from_authority, &[], amount)
             .unwrap(),
     ]
 }
@@ -98,7 +98,7 @@ pub fn close_account(
         &spl_token::id(),
         close_account,
         destination,
-        &close_authority,
+        close_authority,
         &[],
     )
     .unwrap()]
