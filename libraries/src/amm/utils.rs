@@ -21,11 +21,13 @@ pub struct AmmKeys {
     pub nonce: u8,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum CalculateMethod {
     CalculateWithLoadAccount,
     Simulate(Pubkey),
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum SwapDirection {
     /// Input token pc, output token coin
     PC2Coin,
