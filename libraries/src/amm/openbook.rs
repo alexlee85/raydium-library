@@ -80,13 +80,11 @@ pub async fn get_keys_for_market<'a>(
     let market_state: MarketState = {
         let account_flags = Market::account_flags(&account_data)?;
         if account_flags.intersects(AccountFlag::Permissioned) {
-            println!("MarketStateV2");
             let state = transmute_one_pedantic::<MarketStateV2>(transmute_to_bytes(&words))
                 .map_err(|e| e.without_src())?;
             state.check_flags(true)?;
             state.inner
         } else {
-            println!("MarketStateV");
             let state = transmute_one_pedantic::<MarketState>(transmute_to_bytes(&words))
                 .map_err(|e| e.without_src())?;
             state.check_flags(true)?;
