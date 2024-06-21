@@ -28,7 +28,7 @@ fn max_amount_with_slippage(input_amount: u64, slippage_bps: u64) -> Result<u64>
         .and_then(|scaled| scaled.checked_div(ten_thousand))
         .ok_or_else(|| anyhow!("U128 too big or negative"))?;
 
-    u64::try_from(result).map_err(|err| anyhow!("{err}"))
+    u64::try_from(result).map_err(|err| anyhow!("U128 to u64 overflow: {err}"))
 }
 
 fn min_amount_with_slippage(input_amount: u64, slippage_bps: u64) -> Result<u64> {
@@ -42,7 +42,7 @@ fn min_amount_with_slippage(input_amount: u64, slippage_bps: u64) -> Result<u64>
         .and_then(|scaled| scaled.checked_div(ten_thousand))
         .ok_or_else(|| anyhow!("U128 too big or negative"))?;
 
-    u64::try_from(result).map_err(|err| anyhow!("{err}"))
+    u64::try_from(result).map_err(|err| anyhow!("U128 to u64 overflow: {err}"))
 }
 
 // pool_vault_amount = vault_amount + open_orders.native_total + partial filled without consumed - amm.need_take
