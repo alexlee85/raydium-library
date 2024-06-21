@@ -71,31 +71,52 @@ pub async fn calculate_pool_vault_amounts(
             let accounts = array_ref![rsps, 0, 7];
             let [amm_account, amm_target_account, amm_pc_vault_account, amm_coin_vault_account, amm_open_orders_account, market_account, market_event_q_account] =
                 accounts;
+            let amm_account_data = amm_account
+                .clone()
+                .map(|it| it.data)
+                .ok_or_else(|| anyhow!("amm account {amm_pool} not exist"))?;
             let amm: raydium_amm::state::AmmInfo =
-                transmute_one_pedantic::<raydium_amm::state::AmmInfo>(transmute_to_bytes(
-                    &amm_account.as_ref().unwrap().clone().data,
-                ))
-                .map_err(|e| e.without_src())?;
+                transmute_one_pedantic(transmute_to_bytes(&amm_account_data))
+                    .map_err(|e| e.without_src())?;
+
+            let amm_target_data = amm_target_account
+                .clone()
+                .map(|it| it.data)
+                .ok_or_else(|| anyhow!("amm target {} not exist", amm_keys.amm_target))?;
+
             let _amm_target: raydium_amm::state::TargetOrders =
-                transmute_one_pedantic::<raydium_amm::state::TargetOrders>(transmute_to_bytes(
-                    &amm_target_account.as_ref().unwrap().clone().data,
-                ))
-                .map_err(|e| e.without_src())?;
+                transmute_one_pedantic(transmute_to_bytes(&amm_target_data))
+                    .map_err(|e| e.without_src())?;
+
             let amm_pc_vault = spl_token::state::Account::unpack(
-                &amm_pc_vault_account.as_ref().unwrap().clone().data,
-            )
-            .unwrap();
+                &amm_pc_vault_account
+                    .clone()
+                    .map(|it| it.data)
+                    .ok_or_else(|| anyhow!("amm pc vault {} not exist", amm_keys.amm_pc_vault))?,
+            )?;
+
             let amm_coin_vault = spl_token::state::Account::unpack(
-                &amm_coin_vault_account.as_ref().unwrap().clone().data,
-            )
-            .unwrap();
+                &amm_coin_vault_account
+                    .clone()
+                    .map(|it| it.data)
+                    .ok_or_else(|| {
+                        anyhow!("amm coin vault {} not exist", amm_keys.amm_coin_vault)
+                    })?,
+            )?;
+
             let (amm_pool_pc_vault_amount, amm_pool_coin_vault_amount) =
                 if raydium_amm::state::AmmStatus::from_u64(amm.status).orderbook_permission() {
                     let amm_open_orders_account =
-                        &mut amm_open_orders_account.as_ref().unwrap().clone();
-                    let market_account = &mut market_account.as_ref().unwrap().clone();
-                    let market_event_q_account =
-                        &mut market_event_q_account.as_ref().unwrap().clone();
+                        &mut amm_open_orders_account.clone().ok_or_else(|| {
+                            anyhow!("amm open orders {} not exist", amm_keys.amm_open_order)
+                        })?;
+                    let market_account = &mut market_account
+                        .clone()
+                        .ok_or_else(|| anyhow!("amm market {} not exist", amm_keys.market))?;
+                    let market_event_q_account = &mut market_event_q_account
+                        .clone()
+                        .clone()
+                        .ok_or_else(|| anyhow!("amm event q {} not exist", market_keys.event_q))?;
 
                     let amm_open_orders_info =
                         (&amm.open_orders, amm_open_orders_account).into_account_info();
@@ -168,7 +189,7 @@ pub async fn calculate_pool_vault_amounts(
         CalculateMethod::Simulate(fee_payer) => {
             let amm = rpc::get_account::<raydium_amm::state::AmmInfo>(client, amm_pool)
                 .await?
-                .unwrap();
+                .ok_or_else(|| anyhow!("amm pool {amm_pool} not existed"))?;
             let simulate_pool_info_instruction = raydium_amm::instruction::simulate_get_pool_info(
                 amm_program,
                 amm_pool,
@@ -193,9 +214,17 @@ pub async fn calculate_pool_vault_amounts(
                 if let Some(logs) = result.value.logs {
                     for log in logs {
                         if log.contains("GetPoolData: ") {
-                            let begin = log.find('{').unwrap();
-                            let end = log.rfind('}').unwrap() + 1;
-                            let json_str = log.get(begin..end).unwrap();
+                            let begin = log
+                                .find('{')
+                                .ok_or_else(|| anyhow!("no GetPoolData begin found"))?;
+                            let end = log
+                                .rfind('}')
+                                .map(|idx| idx + 1)
+                                .ok_or_else(|| anyhow!("no GetPoolData end found"))?;
+
+                            let json_str = log
+                                .get(begin..end)
+                                .ok_or_else(|| anyhow!("not GetPoolData json string found"))?;
                             ret = raydium_amm::state::GetPoolData::from_json(json_str)
                         }
                     }
